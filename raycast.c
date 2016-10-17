@@ -58,9 +58,9 @@ void normalize(double *v)
 	if (norm)
 	{
 		double factor = 1.0 / norm;
-		v[0] *= norm;
-		v[1] *= norm;
-		v[2] *= norm;
+		v[0] *= factor;
+		v[1] *= factor;
+		v[2] *= factor;
 	}
 }
 
@@ -125,7 +125,7 @@ int shoot(double *p, double *u, double *pos, int *index)
   {
     if (strcmp(scene[i].type, "plane") == 0)
     {
-      if (ray_plane(p, u, &scene[i], intersection_point, &t))
+      if (ray_plane(p, u, &scene[i], intersection_point, &t) && t>=0.0)
       {
 				// intersection is valid if z is between near and far clipping planes
 				if (intersection_point[2] >= zp && intersection_point[2] <= fcp)	// clipping to near and far planes
@@ -142,7 +142,7 @@ int shoot(double *p, double *u, double *pos, int *index)
     }
     else if (strcmp(scene[i].type, "sphere") == 0)
     {
-      if (ray_sphere(p, u, &scene[i], intersection_point, &t))
+      if (ray_sphere(p, u, &scene[i], intersection_point, &t) && t>= 0.0)
       {
         double distance = distance_two_points(p, intersection_point);
         if (closest_index == -1 || distance < closest_distance)
@@ -291,27 +291,24 @@ void ray_casting(const char *filename)
 			double colorIJ[3] = { 0,0,0 };
 			if (shoot(eyePos, ur, hit, &index))
 			{
-				// pixel colored by object hit 
-				int k = (height - 1 - i) * width + j;
-
 				for (int k = 0; k < nNodes; k++) if (scene[k].type[0] == 'l')	// for earch light
 				{
-					// ray origing
+					// ray origing (fron object to light)
 					double *Ron = hit;
 
 					// ray direction
 					double Rdn[3];
-					Rdn[0] = scene[k].position[0] - Ron[0];
-					Rdn[1] = scene[k].position[1] - Ron[1];
-					Rdn[2] = scene[k].position[2] - Ron[2];
+					// light position - hit
+					subtract(scene[k].position, Ron, Rdn);
 
 					normalize(Rdn);
 
 					// look for the closest ray intersection
 					double objHit[3];
-					int objIndex;
-					if (shoot(Ron, Rdn, objHit, &objIndex))
+					int objIndex = index;
+					if (1) //shoot(Ron, Rdn, objHit, &objIndex))
 					{
+
 						// the object is the closets to the light direction
 						if (objIndex == index)
 						{
@@ -341,6 +338,9 @@ void ray_casting(const char *filename)
 				}
 
 				// need to be  sure that every color component is betwqeen 0 and 1 before conversion
+				// pixel colored by object hit 
+				int k = (height - 1 - i) * width + j;
+
 				clamp(colorIJ, 0.0, 1.0);
 				imageR[k] = (unsigned char)(colorIJ[0] * 255.0);
 				imageG[k] = (unsigned char)(colorIJ[1] * 255.0);
