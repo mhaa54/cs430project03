@@ -172,11 +172,6 @@ void next_object(FILE *json, node *pNode)
 			expect_c(json, ':');
 			skip_ws(json);
 			double v = next_number(json);
-			if (pNode->radial == NULL)
-			{
-				pNode->radial = (double *)malloc(3 * sizeof(double));
-				memset(pNode->radial, 0, sizeof(double) * 3);
-			}
 			pNode->radial[0] = v;
 		}
 		else if (strcmp(name, "radial-a1") == 0)
@@ -185,11 +180,6 @@ void next_object(FILE *json, node *pNode)
 			expect_c(json, ':');
 			skip_ws(json);
 			double v = next_number(json);
-			if (pNode->radial == NULL)
-			{
-				pNode->radial = (double *)malloc(3 * sizeof(double));
-				memset(pNode->radial, 0, sizeof(double) * 3);
-			}
 			pNode->radial[1] = v;
 		}
 		else if (strcmp(name, "radial-a2") == 0)
@@ -198,11 +188,6 @@ void next_object(FILE *json, node *pNode)
 			expect_c(json, ':');
 			skip_ws(json);
 			double v = next_number(json);
-			if (pNode->radial == NULL)
-			{
-				pNode->radial = (double *)malloc(3 * sizeof(double));
-				memset(pNode->radial, 0, sizeof(double) * 3);
-			}
 			pNode->radial[2] = v;
 		}
 

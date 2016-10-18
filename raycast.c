@@ -4,6 +4,8 @@
 #include "ppmrw_io.h"
 #include <math.h>
 
+// shinniness factor for specular reflection
+#define SHININNESS 10
 
 // maximum number of objects
 #define MAX_NODES 128
@@ -41,7 +43,7 @@ int ray_plane(double *pr, double *ur, node *pNode, double *result, double *tValu
 
 	double dot_npr_p0 = n[0] * (pr[0]-p[0]) + n[1] * (pr[1]-p[1]) + n[2] * (pr[2]-p[2]);
 	// compute the value of t where the ray intersects the plane
-  double t = dot_npr_p0 / dot_nu;
+  double t = -dot_npr_p0 / dot_nu;
 
   // result = [0,0,0] + T * u
   result[0] = pr[0] + t*ur[0];
@@ -164,6 +166,11 @@ int shoot(double *p, double *u, double *pos, int *index)
   return 0;
 }
 
+double dot_product(double *a, double *b)
+{
+	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
 void subtract(double *p, double * q, double *result)
 {
 	result[0] = p[0] - q[0];
@@ -173,10 +180,11 @@ void subtract(double *p, double * q, double *result)
 
 void reflect(double *L, double *N, double *R)
 {
-	double dot = L[0] * N[0] + L[1] * N[1] + L[2] * N[2];
+	double dot = dot_product(N,N);
 	R[0] = 2 * dot * N[0] - L[0];
 	R[1] = 2 * dot * N[1] - L[1];
 	R[2] = 2 * dot * N[2] - L[2];
+	normalize(R);
 }
 
 void clamp(double *v, double minimum, double maximum)
@@ -188,14 +196,71 @@ void clamp(double *v, double minimum, double maximum)
 			v[i] = maximum;
 }
 
-void Phong(double *L, double *N, double *R, node *obj, node *light, double *result)
+void Phong(double *L, double *N, double *R, double *V, double *hitPoint, node *obj, node *light, double *result)
 {
 	
-	double dot_diffuse = L[0] * N[0] + L[1] * N[1] + L[2] * N[2];
-	result[0] = dot_diffuse * obj->diffuse[0];
-	result[1] = dot_diffuse * obj->diffuse[1];
-	result[2] = dot_diffuse * obj->diffuse[2];
+	double dot_diffuse = dot_product(N,L);
+	double dot_specular = dot_product(R,V);
 
+	if (obj->diffuse != NULL && dot_diffuse > 0.0)
+	{
+		result[0] = dot_diffuse * obj->diffuse[0];
+		result[1] = dot_diffuse * obj->diffuse[1];
+		result[2] = dot_diffuse * obj->diffuse[2];
+	}
+	
+	if (obj->specular != NULL && dot_specular > 0)
+	{
+		double spec_factor = pow(dot_specular, SHININNESS);
+		result[0] += spec_factor * obj->specular[0];
+		result[1] += spec_factor * obj->specular[1];
+		result[2] += spec_factor * obj->specular[2];
+	}
+	
+	// light color should attenuate the color
+	if (light->color)
+	{
+		result[0] *= light->color[0];
+		result[1] *= light->color[1];
+		result[2] *= light->color[2];
+	}
+
+	// angular attenuation (for spot lights)
+	if (light->normal != NULL && light->angular > 0.0)
+	{
+		// minus dot product between "direction" and light vector -L
+		// because < direction, -L >
+		double dot = -dot_product(light->normal, L);
+		double fang = 0.0f;
+
+		if (fabs(dot) >= light->angular)
+			fang = pow(dot, 2.0);
+		result[0] *= fang;
+		result[1] *= fang;
+		result[2] *= fang;
+	}
+
+	if (light->radial[0] != 0.0 || light->radial[1] != 0.0 || light->radial[2] != 0.0)
+	{
+		// distance from light to point
+		double d = distance_two_points(light->position, hitPoint);
+		if (d > 0.0)
+		{
+			double deno = d * d * light->radial[2] + d * light->radial[1] + light->radial[0];
+			if (fabs(deno) > 0.0001)
+			{
+				double frad = 1.0 / deno;
+				if (frad < 0.0)
+					frad = 0.0;
+				if (frad < 1.0 && frad >=0.0)
+				{
+					result[0] *= frad;
+					result[1] *= frad;
+					result[2] *= frad;
+				}
+			}
+		}
+	}
 }
 
 // to the ray casting, and save it into filename
@@ -293,42 +358,51 @@ void ray_casting(const char *filename)
 			{
 				for (int k = 0; k < nNodes; k++) if (scene[k].type[0] == 'l')	// for earch light
 				{
-					// ray origing (fron object to light)
-					double *Ron = hit;
+					// ray origing (fron light to object)
+					double *Ron = scene[k].position;
 
 					// ray direction
 					double Rdn[3];
 					// light position - hit
-					subtract(scene[k].position, Ron, Rdn);
+					subtract(hit, Ron, Rdn);
 
 					normalize(Rdn);
 
 					// look for the closest ray intersection
 					double objHit[3];
 					int objIndex = index;
-					if (1) //shoot(Ron, Rdn, objHit, &objIndex))
+					if (shoot(Ron, Rdn, objHit, &objIndex))
 					{
 
 						// the object is the closets to the light direction
 						if (objIndex == index)
 						{
-							double resultColor[3];
-							double N[3], *L, *V;
+							double resultColor[3] = {0.0, 0.0, 0.0};
+							double N[3], L[3], V[3];
 							// acum light
 							if (scene[index].type[0] == 's')	// sphere
 								//N = Ron - scene[index].position 
-								subtract(Ron, scene[index].position, N);
+								subtract(hit, scene[index].position, N);
 							else if (scene[index].type[0] == 'p')	// plane
 								memcpy(N, scene[index].normal, sizeof(double) * 3);
 							normalize(N);
-							// same as L = light position - Ron
-							L = Rdn;
+
+							// L = light position - hit
+							subtract(scene[k].position, hit, L);
+							normalize(L);
+
+							// computing reflext ray
 							double R[3];
 							reflect(L, N, R);
-							V = ur;
+
+							// view vector = (0,0,0) - hit 
+							V[0] = -hit[0];
+							V[1] = -hit[1];
+							V[2] = -hit[2];
+							normalize(V);
 
 							// compute light model with L, N, R, Diffuse and Specular
-							Phong(L, N, R, &scene[index], &scene[k], resultColor);
+							Phong(L, N, R, V, hit, &scene[index], &scene[k], resultColor);
 							colorIJ[0] += resultColor[0];
 							colorIJ[1] += resultColor[1];
 							colorIJ[2] += resultColor[2];

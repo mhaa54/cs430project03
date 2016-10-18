@@ -18,8 +18,8 @@ typedef struct node
 	double *color;
 	double *position;
 	double *normal;
-	double angular;	// a0, a1, a2 ... only for light
-	double *radial;	// a0, only for light
+	double angular;	// a0, only for light
+	double radial[3];	// a0, a1, a2 ... only for light
 	double *diffuse;
 	double *specular;
 } node;
