@@ -89,7 +89,7 @@ char* next_string(FILE* json)
     c = next_c(json);
   }
   buffer[i] = 0;
-  return _strdup(buffer);
+  return strdup(buffer);
 }
 
 // next_number(f) returns the next floating point value on the json file
@@ -190,7 +190,26 @@ void next_object(FILE *json, node *pNode)
 			double v = next_number(json);
 			pNode->radial[2] = v;
 		}
+		else if (strcmp(name, "theta") == 0)
+		{
+			skip_ws(json);
+			expect_c(json, ':');
+			skip_ws(json);
+			pNode->theta = next_number(json);
 
+			// converting degress to radians
+			pNode->theta *= 3.1415926535897932384 / 180.0;
+		}
+		else if (strcmp(name, "ns") == 0)
+		{
+			skip_ws(json);
+			expect_c(json, ':');
+			skip_ws(json);
+			pNode->ns = next_number(json);
+			// should be 0 or larger
+			if (pNode->ns < 0.0)
+				pNode->ns = 0.0;
+		}
 		else if (strcmp(name, "angular-a0") == 0)
 		{
 			skip_ws(json);
@@ -256,7 +275,7 @@ void next_object(FILE *json, node *pNode)
     }
 
   }
-	printf("loaded\n");
+	//printf("loaded\n");
 }
 
 

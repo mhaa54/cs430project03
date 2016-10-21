@@ -18,10 +18,12 @@ typedef struct node
 	double *color;
 	double *position;
 	double *normal;
+	double theta;
 	double angular;	// a0, only for light
 	double radial[3];	// a0, a1, a2 ... only for light
 	double *diffuse;
 	double *specular;
+	double ns;	// shininness
 } node;
 
 // next_c() wraps the getc() function and provides error checking and line

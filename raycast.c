@@ -2,8 +2,8 @@
 #include "ppmrw_io.h"
 #include <math.h>
 
-// shinniness factor for specular reflection
-#define SHININNESS 10
+// default shinniness factor for specular reflection (used wuieh ns==0)
+#define SHININNESS 20
 
 // maximum number of objects
 #define MAX_NODES 128
@@ -69,6 +69,35 @@ double distance_two_points(double *p, double *q)
 	return sqrt((p[0] - q[0])*(p[0] - q[0]) + (p[1] - q[1])*(p[1] - q[1]) + (p[2] - q[2])*(p[2] - q[2]));
 }
 
+double dot_product(double *a, double *b)
+{
+	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+void subtract(double *p, double * q, double *result)
+{
+	result[0] = p[0] - q[0];
+	result[1] = p[1] - q[1];
+	result[2] = p[2] - q[2];
+}
+
+void reflect(double *L, double *N, double *R)
+{
+	double dot = dot_product(N, N);
+	R[0] = 2 * dot * N[0] - L[0];
+	R[1] = 2 * dot * N[1] - L[1];
+	R[2] = 2 * dot * N[2] - L[2];
+	normalize(R);
+}
+
+void clamp(double *v, double minimum, double maximum)
+{
+	for (int i = 0; i < 3; i++)
+		if (v[i] < minimum)
+			v[i] = minimum;
+		else if (v[i] > maximum)
+			v[i] = maximum;
+}
 
 // compute the intersection between ray and sphere
 // intersection should be between near clipping plane and far clipping plane
@@ -93,11 +122,6 @@ int ray_sphere(double *pr, double *u, node *pNode, double *result, double *tValu
     return 0;
   if (d == r) // one intersection
   {
-    // out of clipping planes
-    if (pclose[2] < zp || pclose[2] > fcp)
-      return 0;
-
-    // inside clipping planes...then copy the result
 		*tValue = tclose;
     memcpy(result, pclose, sizeof(double) * 3);
     return 1;
@@ -164,36 +188,6 @@ int shoot(double *p, double *u, double *pos, int *index)
   return 0;
 }
 
-double dot_product(double *a, double *b)
-{
-	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-
-void subtract(double *p, double * q, double *result)
-{
-	result[0] = p[0] - q[0];
-	result[1] = p[1] - q[1];
-	result[2] = p[2] - q[2];
-}
-
-void reflect(double *L, double *N, double *R)
-{
-	double dot = dot_product(N,N);
-	R[0] = 2 * dot * N[0] - L[0];
-	R[1] = 2 * dot * N[1] - L[1];
-	R[2] = 2 * dot * N[2] - L[2];
-	normalize(R);
-}
-
-void clamp(double *v, double minimum, double maximum)
-{
-	for (int i = 0; i < 3; i++)
-		if (v[i] < minimum)
-			v[i] = minimum;
-		else if (v[i] > maximum)
-			v[i] = maximum;
-}
-
 void Phong(double *L, double *N, double *R, double *V, double *hitPoint, node *obj, node *light, double *result)
 {
 	
@@ -209,7 +203,11 @@ void Phong(double *L, double *N, double *R, double *V, double *hitPoint, node *o
 	
 	if (obj->specular != NULL && dot_specular > 0)
 	{
-		double spec_factor = pow(dot_specular, SHININNESS);
+		double spec_factor;
+		if (obj->ns == 0.0)
+			spec_factor = pow(dot_specular, SHININNESS);
+		else 
+			spec_factor = pow(dot_specular, obj->ns);
 		result[0] += spec_factor * obj->specular[0];
 		result[1] += spec_factor * obj->specular[1];
 		result[2] += spec_factor * obj->specular[2];
@@ -223,23 +221,24 @@ void Phong(double *L, double *N, double *R, double *V, double *hitPoint, node *o
 		result[2] *= light->color[2];
 	}
 
-	// angular attenuation (for spot lights)
-	if (light->normal != NULL && light->angular > 0.0)
+	// light normal == light direction for spotlight
+	if (light->normal != NULL && light->theta > 0.0)	// is spotlight??
 	{
 		// minus dot product between "direction" and light vector -L
 		// because < direction, -L >
 		double dot = -dot_product(light->normal, L);
+		// angular attenuation (for spot lights)
 		double fang = 0.0f;
 
-		if (fabs(dot) >= light->angular)
-			fang = pow(dot, 2.0);
+		if (fabs(dot) >= cos(light->theta))
+			fang = pow(dot, light->angular);
 		result[0] *= fang;
 		result[1] *= fang;
 		result[2] *= fang;
 	}
-
-	if (light->radial[0] != 0.0 || light->radial[1] != 0.0 || light->radial[2] != 0.0)
+	else if (light->radial[0] != 0.0 || light->radial[1] != 0.0 || light->radial[2] != 0.0)
 	{
+		// it is a point light!
 		// distance from light to point
 		double d = distance_two_points(light->position, hitPoint);
 		if (d > 0.0)
@@ -297,16 +296,12 @@ void ray_casting(const char *filename)
 
   // creating image buffer
   unsigned char *imageR = NULL, *imageG = NULL, *imageB = NULL;
-  /*
-  * Dynamically allocate memory to hold image buffers
-  */
+  // Dynamically allocate memory to hold image buffers
   imageR = (unsigned char *)malloc(height * width * sizeof(unsigned char));
   imageG = (unsigned char *)malloc(height * width * sizeof(unsigned char));
   imageB = (unsigned char *)malloc(height * width * sizeof(unsigned char));
 
-  /*
-  * Check validity
-  */
+  // Check validity
   if (imageR == NULL || imageG == NULL || imageB == NULL)
   {
     fprintf(stderr, "Memory allocation failed for the image\n");
@@ -352,9 +347,13 @@ void ray_casting(const char *filename)
       double hit[3];
       int index;
 			double colorIJ[3] = { 0,0,0 };
-			if (shoot(eyePos, ur, hit, &index))
+
+			// check if an object is hit, and in that case, if the hit is between near and far clipping planes
+			if (shoot(eyePos, ur, hit, &index) && hit[2] >= zp && hit[2] <= fcp)
 			{
-				for (int k = 0; k < nNodes; k++) if (scene[k].type[0] == 'l')	// for earch light
+				// inside clipping planes...
+				// now, loop over all lights
+				for (int k = 0; k < nNodes; k++) if (scene[k].type[0] == 'l')	// for each light
 				{
 					// ray origing (fron light to object)
 					double *Ron = scene[k].position;
@@ -371,7 +370,6 @@ void ray_casting(const char *filename)
 					int objIndex = index;
 					if (shoot(Ron, Rdn, objHit, &objIndex))
 					{
-
 						// the object is the closets to the light direction
 						if (objIndex == index)
 						{
@@ -404,7 +402,6 @@ void ray_casting(const char *filename)
 							colorIJ[0] += resultColor[0];
 							colorIJ[1] += resultColor[1];
 							colorIJ[2] += resultColor[2];
-
 						}
 					}
 				}
@@ -433,6 +430,7 @@ void ray_casting(const char *filename)
 
 void free_scene()
 {
+	// first erase dynamic mem
   for (int i = 0; i < nNodes; i++)
   {
     if (scene[i].color != NULL)
@@ -443,7 +441,14 @@ void free_scene()
       free(scene[i].normal);
     if (scene[i].type != NULL)
       free(scene[i].type);
-  }
+		if (scene[i].diffuse != NULL)
+			free(scene[i].diffuse);
+		if (scene[i].specular != NULL)
+			free(scene[i].specular);
+	}
+
+	// clear all nodes with zeros
+	memset(scene, 0, sizeof(node) * MAX_NODES);
 }
 
 int main(int argc, char *argv[])
