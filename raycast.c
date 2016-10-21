@@ -1,5 +1,3 @@
-
-
 #include "json.h"
 #include "ppmrw_io.h"
 #include <math.h>
