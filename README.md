@@ -29,3 +29,4 @@ From the comand line in the order of :
 <br />Diffuse_color The diffuse color of the object (vector)<br />
 <br />Specular_color The specular color of the object (vector)<br />
 <br />You may optionally include an object property, ns, for shininess<br />
+
