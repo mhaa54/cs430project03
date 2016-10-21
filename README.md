@@ -10,7 +10,7 @@ we discussed in class.
 From the comand line in the order of :
 
 
-![alt tag](https://github.com/mhaa54/cs430project02/blob/master/Example%20how%20to%20run%20the%20project.png)
+![alt tag](https://github.com/mhaa54/cs430project03/blob/master/Example%20to%20run%20the%20program.png)
 
 
 # Specifically, these properties should be supported for lights:
