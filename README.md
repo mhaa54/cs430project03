@@ -1,7 +1,7 @@
 # CS 430 Project03 - Illumination
 Project 03 for CS 430 Computer Graphics
 
-In the previous project you will wrote code to raycast mathematical primitives based on a scene
+In the previous project you wrote code to raycast mathematical primitives based on a scene
 input file into a pixel buffer. In this project you will color objects based on the shading model
 we discussed in class.
 
